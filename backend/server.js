@@ -1,10 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { dbAll, dbGet, dbRun } = require('./database');
+require('dotenv').config();
+
+const connectDB = require('./config/dbconnect');
+const Todo = require('./schema');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Connect to MongoDB
+connectDB();
 
 // Middleware
 app.use(cors());
@@ -16,7 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // GET all todos
 app.get('/api/todos', async (req, res) => {
   try {
-    const todos = await dbAll('SELECT * FROM todos ORDER BY created_at DESC');
+    const todos = await Todo.find().sort({ createdAt: -1 });
     res.json(todos);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -26,7 +32,7 @@ app.get('/api/todos', async (req, res) => {
 // GET single todo by ID
 app.get('/api/todos/:id', async (req, res) => {
   try {
-    const todo = await dbGet('SELECT * FROM todos WHERE id = ?', [req.params.id]);
+    const todo = await Todo.findById(req.params.id);
     if (!todo) {
       return res.status(404).json({ error: 'Todo not found' });
     }
@@ -45,13 +51,13 @@ app.post('/api/todos', async (req, res) => {
       return res.status(400).json({ error: 'Title is required' });
     }
 
-    const result = await dbRun(
-      'INSERT INTO todos (title, description) VALUES (?, ?)',
-      [title, description || '']
-    );
+    const newTodo = new Todo({
+      title,
+      description: description || ''
+    });
 
-    const newTodo = await dbGet('SELECT * FROM todos WHERE id = ?', [result.id]);
-    res.status(201).json(newTodo);
+    const savedTodo = await newTodo.save();
+    res.status(201).json(savedTodo);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -63,24 +69,17 @@ app.put('/api/todos/:id', async (req, res) => {
     const { title, description, completed } = req.body;
     const { id } = req.params;
 
-    const existingTodo = await dbGet('SELECT * FROM todos WHERE id = ?', [id]);
+    const existingTodo = await Todo.findById(id);
     if (!existingTodo) {
       return res.status(404).json({ error: 'Todo not found' });
     }
 
-    await dbRun(
-      `UPDATE todos 
-       SET title = ?, description = ?, completed = ?, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
-      [
-        title !== undefined ? title : existingTodo.title,
-        description !== undefined ? description : existingTodo.description,
-        completed !== undefined ? (completed ? 1 : 0) : existingTodo.completed,
-        id
-      ]
-    );
+    // Update fields
+    if (title !== undefined) existingTodo.title = title;
+    if (description !== undefined) existingTodo.description = description;
+    if (completed !== undefined) existingTodo.completed = completed;
 
-    const updatedTodo = await dbGet('SELECT * FROM todos WHERE id = ?', [id]);
+    const updatedTodo = await existingTodo.save();
     res.json(updatedTodo);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -92,13 +91,12 @@ app.delete('/api/todos/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existingTodo = await dbGet('SELECT * FROM todos WHERE id = ?', [id]);
-    if (!existingTodo) {
+    const deletedTodo = await Todo.findByIdAndDelete(id);
+    if (!deletedTodo) {
       return res.status(404).json({ error: 'Todo not found' });
     }
 
-    await dbRun('DELETE FROM todos WHERE id = ?', [id]);
-    res.json({ message: 'Todo deleted successfully', id: parseInt(id) });
+    res.json({ message: 'Todo deleted successfully', id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
