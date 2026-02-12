@@ -84,14 +84,16 @@ jobs:
 
       - name: Deploy → Staging (push to staging branch)
         if: github.ref == 'refs/heads/staging'
+        env:
+          DEPLOY_IMAGE: ${{ env.IMAGE }}
         run: |
           echo "Deploying to STAGING → ${{ vars.GCR_STAGING_PROJECT_NAME }}"
-          echo "Image: ${{ env.IMAGE }}"
+          echo "Image: ${DEPLOY_IMAGE}"
           
           gcloud run deploy ${{ vars.GCR_STAGING_PROJECT_NAME }} \
             --project ${{ secrets.GCP_PROJECT_ID }} \
             --region ${{ vars.GCR_REGION }} \
-            --image "${{ env.IMAGE }}" \
+            --image "${DEPLOY_IMAGE}" \
             --platform managed \
             --allow-unauthenticated \
             --port 3001 \
@@ -109,14 +111,16 @@ jobs:
 
       - name: Deploy → Production (new release on main)
         if: github.event_name == 'release' && github.event.action == 'published' && github.event.release.target_commitish == 'main'
+        env:
+          DEPLOY_IMAGE: ${{ env.IMAGE }}
         run: |
           echo "Deploying to PRODUCTION → ${{ vars.GCR_PROJECT_NAME }}"
-          echo "Image: ${{ env.IMAGE }}"
+          echo "Image: ${DEPLOY_IMAGE}"
 
           gcloud run deploy ${{ vars.GCR_PROJECT_NAME }} \
             --project ${{ secrets.GCP_PROJECT_ID }} \
             --region ${{ vars.GCR_REGION }} \
-            --image "${{ env.IMAGE }}" \
+            --image "${DEPLOY_IMAGE}" \
             --platform managed \
             --allow-unauthenticated \
             --port 3001 \
