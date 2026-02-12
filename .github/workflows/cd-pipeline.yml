@@ -13,8 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BACKEND_PORT: 3001
-  FRONTEND_PORT: 3000
   IMAGE: docker.io/${{ vars.IMAGE }}:${{ github.sha }}
 
 jobs:
