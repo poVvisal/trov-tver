@@ -90,7 +90,6 @@ jobs:
           flags: '--allow-unauthenticated --port=${{ env.BACKEND_PORT }} --min-instances=0 --max-instances=5 --memory=512Mi --cpu=1 --timeout=300s'
           env_vars: |
             MONGO_URI=${{ secrets.MONGO_URI_STAGING }}
-            PORT=${{ env.BACKEND_PORT }}
             NODE_ENV=staging
 
       # ────────────────────────────────────────────────
@@ -106,5 +105,4 @@ jobs:
           flags: '--allow-unauthenticated --port=${{ env.BACKEND_PORT }} --min-instances=1 --max-instances=10 --memory=512Mi --cpu=1 --timeout=300s'
           env_vars: |
             MONGO_URI=${{ secrets.MONGO_URI }}
-            PORT=${{ env.BACKEND_PORT }}
             NODE_ENV=production
