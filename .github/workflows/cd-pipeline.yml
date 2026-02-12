@@ -1,4 +1,4 @@
-name: CD Pipeline to Google Cloud Run (staging & production)
+name: CD Pipeline to Google Cloud Run (staging and production)
 
 on:
   push:
@@ -6,95 +6,92 @@ on:
       - staging
   workflow_dispatch: {}
   release:
-    types: [published]
+    types: published
 
 env:
   BACKEND_PORT: 3001
   FRONTEND_PORT: 3000
-  # Make sure vars.IMAGE is actually set in GitHub, or this line breaks too
-  IMAGE: docker.io/${{ vars.IMAGE }}:${{ github.sha }}
+  IMAGE: ${{vars.IMAGE}}:${{github.sha}}
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Lint, test & build frontend/backend
+    name: Setup, test, and build project
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
+      - name: Install backend dependencies
+        run: cd backend && npm install
 
-      - name: Install & Test Backend
-        run: |
-          cd backend
-          npm ci
-          npm test
+      - name: Test backend
+        run: cd backend && npm test
 
-      - name: Install & Build Frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-          npm test -- --watchAll=false --passWithNoTests
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
 
-  build-and-deploy:
-    needs: test
+      - name: Test frontend
+        run: cd frontend && npm test -- --watchAll=false --passWithNoTests
+
+  build:
+    needs: test 
     runs-on: ubuntu-latest
-    name: Build Docker image → Push → Deploy Cloud Run
+    name: Setup project, Authorize GitHub Actions to GCP and Docker Hub, and deploy
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
+      - name: Authenticate for GCP cloud run deployment
+        id: gcp-auth
+        uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USER }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and Push Docker Image
+      - name: Authenticate for Docker Hub
+        id: docker-auth
+        env:
+          D_USER: ${{secrets.DOCKER_USER}}
+          D_PASS: ${{secrets.DOCKER_PASSWORD}}
         run: |
-          docker build -t ${{ env.IMAGE }} .
-          docker push ${{ env.IMAGE }}
-          echo "Built & Pushed image → ${{ env.IMAGE }}"
+          docker login -u $D_USER -p $D_PASS
 
-      # ────────────────────────────────────────────────
-      # Staging deployment (Single-line command = No syntax errors)
-      # ────────────────────────────────────────────────
-      - name: Deploy → Staging
-        if: github.ref == 'refs/heads/staging'
+      - name: Build and tag Image
         run: |
-          echo "Deploying to STAGING → ${{ vars.GCR_STAGING_PROJECT_NAME }}"
-          gcloud run deploy ${{ vars.GCR_STAGING_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --image ${{ env.IMAGE }} --platform managed --allow-unauthenticated --port ${{ env.BACKEND_PORT }} --set-env-vars "MONGO_URI=${{ secrets.MONGO_URI_STAGING }},PORT=${{ env.BACKEND_PORT }},NODE_ENV=staging" --tag staging --min-instances 0 --max-instances 5 --memory 512Mi --cpu 1 --timeout 300s --quiet
+          docker build -t ${{env.IMAGE}} .
 
-          echo "Staging URL:"
-          gcloud run services describe ${{ vars.GCR_STAGING_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --format='value(status.url)'
+      - name: Push the image to Docker hub
+        run: |
+          docker push ${{env.IMAGE}}
 
-      # ────────────────────────────────────────────────
-      # Production deployment (Single-line command = No syntax errors)
-      # ────────────────────────────────────────────────
-      - name: Deploy → Production
+      - name: Enable the Billing API
+        run: |
+          gcloud services enable cloudbilling.googleapis.com --project=${{secrets.GCP_PROJECT_ID}}
+
+      - name: Deploy to GCP Run - Production environment (If a new release was published from the main branch)
         if: github.event_name == 'release' && github.event.action == 'published' && github.event.release.target_commitish == 'main'
         run: |
-          echo "Deploying to PRODUCTION → ${{ vars.GCR_PROJECT_NAME }}"
-          gcloud run deploy ${{ vars.GCR_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --image ${{ env.IMAGE }} --platform managed --allow-unauthenticated --port ${{ env.BACKEND_PORT }} --set-env-vars "MONGO_URI=${{ secrets.MONGO_URI }},PORT=${{ env.BACKEND_PORT }},NODE_ENV=production" --tag production --min-instances 0 --max-instances 10 --memory 512Mi --cpu 1 --timeout 300s --quiet
+          gcloud run deploy ${{vars.GCR_PROJECT_NAME}} \
+          --project ${{secrets.GCP_PROJECT_ID}} \
+          --region ${{vars.GCR_REGION}} \
+          --image ${{env.IMAGE}} \
+          --platform "managed" \
+          --allow-unauthenticated \
+          --tag production
 
-          echo "Production URL:"
-          gcloud run services describe ${{ vars.GCR_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --format='value(status.url)'
+      - name: Deploy to GCP Run - Staging environment
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Deploying to staging environment"
+          # Deploy service to staging environment
+          gcloud run deploy ${{vars.GCR_STAGING_PROJECT_NAME}} \
+          --project ${{secrets.GCP_PROJECT_ID}} \
+          --region ${{vars.GCR_REGION}} \
+          --image ${{env.IMAGE}} \
+          --platform "managed" \
+          --allow-unauthenticated \
+          --tag staging
