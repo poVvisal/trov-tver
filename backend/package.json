@@ -12,7 +12,7 @@
     "todo",
     "express",
     "api",
-    "sqlite"
+    "mongodb"
   ],
   "author": "",
   "license": "MIT",
