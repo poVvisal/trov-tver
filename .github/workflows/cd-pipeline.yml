@@ -11,7 +11,7 @@ on:
 env:
   BACKEND_PORT: 3001
   FRONTEND_PORT: 3000
-  IMAGE: ${{ vars.IMAGE }}:${{ github.sha }}     # ← now matches the attached file
+  IMAGE: docker.io/${{ vars.IMAGE }}:${{ github.sha }}
 
 jobs:
   test:
