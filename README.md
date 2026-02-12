@@ -114,7 +114,7 @@ trov-tver/
 ### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/trov-tver.git
+git clone https://github.com/poVvisal/trov-tver.git
 cd trov-tver
 ```
 
@@ -352,7 +352,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👤 Author
 
 **Your Name**  
-GitHub: [@yourusername](https://github.com/yourusername)
+GitHub: [@poVvisal](https://github.com/poVvisal)
 
 ---
 
@@ -368,10 +368,9 @@ GitHub: [@yourusername](https://github.com/yourusername)
 ## 📞 Support
 
 For issues, questions, or contributions:
-- 🐛 [Open an issue](https://github.com/yourusername/trov-tver/issues)
-- 🔀 [Submit a pull request](https://github.com/yourusername/trov-tver/pulls)
-- 📧 Email: your.email@example.com
-
+- 🐛 [Open an issue](https://github.com/poVvisal/trov-tver/issues)
+- 🔀 [Submit a pull request](https://github.com/poVvisal/trov-tver/pulls)
+- 📧 Email: p.visal5927@gmail.com
 ---
 
 **Made with ❤️ and ☕**
