@@ -10,7 +10,7 @@ on:
 
 env:
   # IMAGE: ${{ vars.IMAGE }}:${{ github.sha }}
-  IMAGE: ${{ secrets.DOCKER_USER }}/${{ vars.IMAGE }}:${{ github.sha }}
+  IMAGE: ${{ vars.IMAGE }}:${{ github.sha }}
   NODE_VERSION: '18'
 
 jobs:
