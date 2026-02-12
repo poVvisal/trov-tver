@@ -8,21 +8,16 @@ on:
   release:
     types: [published]
 
-# Best Practice: Stop previous runs if a new one is triggered to save money/chaos
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   BACKEND_PORT: 3001
   FRONTEND_PORT: 3000
-  # Ensure 'vars.IMAGE' is set in GitHub Repo Vars, or this will break
+  # Make sure vars.IMAGE is actually set in GitHub, or this line breaks too
   IMAGE: docker.io/${{ vars.IMAGE }}:${{ github.sha }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Lint, test & build
+    name: Lint, test & build frontend/backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,7 +37,7 @@ jobs:
           npm ci
           npm test
 
-      - name: Install, Build & Test Frontend
+      - name: Install & Build Frontend
         run: |
           cd frontend
           npm ci
@@ -52,13 +47,11 @@ jobs:
   build-and-deploy:
     needs: test
     runs-on: ubuntu-latest
-    name: Build & Deploy
+    name: Build Docker image → Push → Deploy Cloud Run
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Best Practice: Use OIDC (google-github-actions/auth) if possible, 
-      # but sticking to your JSON key method for now.
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -76,67 +69,32 @@ jobs:
           username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Docker image
+      - name: Build and Push Docker Image
         run: |
           docker build -t ${{ env.IMAGE }} .
           docker push ${{ env.IMAGE }}
-          echo "✅ Pushed: ${{ env.IMAGE }}"
+          echo "Built & Pushed image → ${{ env.IMAGE }}"
 
       # ────────────────────────────────────────────────
-      # Staging Deployment
+      # Staging deployment (Single-line command = No syntax errors)
       # ────────────────────────────────────────────────
       - name: Deploy → Staging
         if: github.ref == 'refs/heads/staging'
-        # Fixed: Removed risky trailing spaces and cleaned up the multi-line command
         run: |
-          echo "🚀 Deploying to STAGING..."
-          gcloud run deploy ${{ vars.GCR_STAGING_PROJECT_NAME }} \
-            --project ${{ secrets.GCP_PROJECT_ID }} \
-            --region ${{ vars.GCR_REGION }} \
-            --image ${{ env.IMAGE }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --port ${{ env.BACKEND_PORT }} \
-            --set-env-vars "MONGO_URI=${{ secrets.MONGO_URI_STAGING }},PORT=${{ env.BACKEND_PORT }},NODE_ENV=staging" \
-            --tag staging \
-            --min-instances 0 \
-            --max-instances 5 \
-            --memory 512Mi \
-            --cpu 1 \
-            --timeout 300s \
-            --quiet
+          echo "Deploying to STAGING → ${{ vars.GCR_STAGING_PROJECT_NAME }}"
+          gcloud run deploy ${{ vars.GCR_STAGING_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --image ${{ env.IMAGE }} --platform managed --allow-unauthenticated --port ${{ env.BACKEND_PORT }} --set-env-vars "MONGO_URI=${{ secrets.MONGO_URI_STAGING }},PORT=${{ env.BACKEND_PORT }},NODE_ENV=staging" --tag staging --min-instances 0 --max-instances 5 --memory 512Mi --cpu 1 --timeout 300s --quiet
 
-          echo "✅ Staging URL:"
-          gcloud run services describe ${{ vars.GCR_STAGING_PROJECT_NAME }} \
-            --project ${{ secrets.GCP_PROJECT_ID }} \
-            --region ${{ vars.GCR_REGION }} \
-            --format='value(status.url)'
+          echo "Staging URL:"
+          gcloud run services describe ${{ vars.GCR_STAGING_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --format='value(status.url)'
 
       # ────────────────────────────────────────────────
-      # Production Deployment
+      # Production deployment (Single-line command = No syntax errors)
       # ────────────────────────────────────────────────
       - name: Deploy → Production
-        if: github.event_name == 'release' && github.event.action == 'published'
+        if: github.event_name == 'release' && github.event.action == 'published' && github.event.release.target_commitish == 'main'
         run: |
-          echo "🚀 Deploying to PRODUCTION..."
-          gcloud run deploy ${{ vars.GCR_PROJECT_NAME }} \
-            --project ${{ secrets.GCP_PROJECT_ID }} \
-            --region ${{ vars.GCR_REGION }} \
-            --image ${{ env.IMAGE }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --port ${{ env.BACKEND_PORT }} \
-            --set-env-vars "MONGO_URI=${{ secrets.MONGO_URI }},PORT=${{ env.BACKEND_PORT }},NODE_ENV=production" \
-            --tag production \
-            --min-instances 1 \
-            --max-instances 10 \
-            --memory 512Mi \
-            --cpu 1 \
-            --timeout 300s \
-            --quiet
+          echo "Deploying to PRODUCTION → ${{ vars.GCR_PROJECT_NAME }}"
+          gcloud run deploy ${{ vars.GCR_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --image ${{ env.IMAGE }} --platform managed --allow-unauthenticated --port ${{ env.BACKEND_PORT }} --set-env-vars "MONGO_URI=${{ secrets.MONGO_URI }},PORT=${{ env.BACKEND_PORT }},NODE_ENV=production" --tag production --min-instances 0 --max-instances 10 --memory 512Mi --cpu 1 --timeout 300s --quiet
 
-          echo "✅ Production URL:"
-          gcloud run services describe ${{ vars.GCR_PROJECT_NAME }} \
-            --project ${{ secrets.GCP_PROJECT_ID }} \
-            --region ${{ vars.GCR_REGION }} \
-            --format='value(status.url)'
+          echo "Production URL:"
+          gcloud run services describe ${{ vars.GCR_PROJECT_NAME }} --project ${{ secrets.GCP_PROJECT_ID }} --region ${{ vars.GCR_REGION }} --format='value(status.url)'
