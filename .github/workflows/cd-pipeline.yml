@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ${{ vars.IMAGE }}:${{ github.sha }}
+  IMAGE: kingczin/trov-tver:${{ github.sha }}
   NODE_VERSION: '18'
 
 jobs:
